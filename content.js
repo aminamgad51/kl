@@ -1,4 +1,4 @@
-// Enhanced Content script for ETA Invoice Exporter - Complete Fix for All Pages Loading
+// Optimized Content script for ETA Invoice Exporter - High Performance Version
 class ETAContentScript {
   constructor() {
     this.invoiceData = [];
@@ -10,80 +10,272 @@ class ETAContentScript {
     this.isProcessingAllPages = false;
     this.progressCallback = null;
     this.domObserver = null;
-    this.pageLoadTimeout = 20000; // 20 seconds timeout
+    this.pageLoadTimeout = 15000; // Reduced from 20s to 15s
+    this.networkInterceptor = null;
+    this.cachedNetworkData = new Map();
     this.init();
   }
   
   init() {
-    console.log('ETA Exporter: Content script initialized');
+    console.log('ETA Exporter: Optimized content script initialized');
+    
+    // Setup network interception first
+    this.setupNetworkInterception();
+    
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', () => this.scanForInvoices());
     } else {
-      setTimeout(() => this.scanForInvoices(), 1000);
+      // Use requestIdleCallback for better performance
+      this.scheduleInitialScan();
     }
     
-    this.setupMutationObserver();
+    this.setupOptimizedMutationObserver();
   }
   
-  setupMutationObserver() {
-    this.observer = new MutationObserver((mutations) => {
-      let shouldRescan = false;
-      
-      mutations.forEach((mutation) => {
-        if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-          mutation.addedNodes.forEach((node) => {
-            if (node.nodeType === Node.ELEMENT_NODE) {
-              if (node.classList?.contains('ms-DetailsRow') || 
-                  node.querySelector?.('.ms-DetailsRow') ||
-                  node.classList?.contains('ms-List-cell')) {
-                shouldRescan = true;
-              }
-            }
-          });
+  scheduleInitialScan() {
+    if (window.requestIdleCallback) {
+      window.requestIdleCallback(() => this.scanForInvoices(), { timeout: 1000 });
+    } else {
+      setTimeout(() => this.scanForInvoices(), 100);
+    }
+  }
+  
+  setupNetworkInterception() {
+    // Intercept XHR requests to capture invoice data directly from API
+    const originalXHROpen = XMLHttpRequest.prototype.open;
+    const originalXHRSend = XMLHttpRequest.prototype.send;
+    const originalFetch = window.fetch;
+    
+    XMLHttpRequest.prototype.open = function(method, url, ...args) {
+      this._url = url;
+      this._method = method;
+      return originalXHROpen.call(this, method, url, ...args);
+    };
+    
+    XMLHttpRequest.prototype.send = function(data) {
+      this.addEventListener('load', () => {
+        if (this._url && this._url.includes('invoicing.eta.gov.eg') && 
+            (this._url.includes('documents') || this._url.includes('invoice'))) {
+          try {
+            const responseData = JSON.parse(this.responseText);
+            this.handleNetworkResponse(this._url, responseData);
+          } catch (e) {
+            // Not JSON, ignore
+          }
         }
       });
+      return originalXHRSend.call(this, data);
+    }.bind(this);
+    
+    // Intercept fetch requests
+    window.fetch = async function(url, options = {}) {
+      const response = await originalFetch(url, options);
+      
+      if (url.includes && url.includes('invoicing.eta.gov.eg') && 
+          (url.includes('documents') || url.includes('invoice'))) {
+        try {
+          const clonedResponse = response.clone();
+          const data = await clonedResponse.json();
+          this.handleNetworkResponse(url, data);
+        } catch (e) {
+          // Not JSON or already consumed, ignore
+        }
+      }
+      
+      return response;
+    }.bind(this);
+  }
+  
+  handleNetworkResponse(url, data) {
+    // Cache network responses for faster access
+    const cacheKey = this.generateCacheKey(url);
+    this.cachedNetworkData.set(cacheKey, {
+      timestamp: Date.now(),
+      data: data
+    });
+    
+    // If this looks like invoice list data, extract it immediately
+    if (this.isInvoiceListResponse(data)) {
+      console.log('ETA Exporter: Found invoice data in network response');
+      this.extractFromNetworkData(data);
+    }
+  }
+  
+  generateCacheKey(url) {
+    return url.replace(/[?&]_=\d+/, '').replace(/[?&]timestamp=\d+/, '');
+  }
+  
+  isInvoiceListResponse(data) {
+    return data && (
+      (data.items && Array.isArray(data.items)) ||
+      (data.documents && Array.isArray(data.documents)) ||
+      (data.invoices && Array.isArray(data.invoices)) ||
+      (Array.isArray(data) && data.length > 0 && data[0].uuid)
+    );
+  }
+  
+  extractFromNetworkData(data) {
+    let invoices = [];
+    
+    // Try different possible data structures
+    if (data.items) invoices = data.items;
+    else if (data.documents) invoices = data.documents;
+    else if (data.invoices) invoices = data.invoices;
+    else if (Array.isArray(data)) invoices = data;
+    
+    if (invoices.length > 0) {
+      this.invoiceData = invoices.map((item, index) => this.transformNetworkDataToInvoice(item, index + 1));
+      
+      // Update pagination info from network response
+      if (data.totalCount) this.totalCount = data.totalCount;
+      if (data.currentPage) this.currentPage = data.currentPage;
+      if (data.totalPages) this.totalPages = data.totalPages;
+      
+      console.log(`ETA Exporter: Extracted ${this.invoiceData.length} invoices from network data`);
+    }
+  }
+  
+  transformNetworkDataToInvoice(networkItem, index) {
+    return {
+      index: index,
+      pageNumber: this.currentPage,
+      serialNumber: index,
+      viewButton: 'عرض',
+      documentType: networkItem.typeName || networkItem.documentType || 'فاتورة',
+      documentVersion: networkItem.version || networkItem.documentVersion || '1.0',
+      status: networkItem.status || networkItem.statusName || '',
+      issueDate: networkItem.dateTimeIssued || networkItem.issueDate || networkItem.createdAt || '',
+      submissionDate: networkItem.dateTimeReceived || networkItem.submissionDate || networkItem.dateTimeIssued || '',
+      invoiceCurrency: networkItem.currency || 'EGP',
+      invoiceValue: this.calculateInvoiceValue(networkItem),
+      vatAmount: networkItem.vatAmount || networkItem.totalTaxAmount || '',
+      taxDiscount: networkItem.taxDiscount || '0',
+      totalInvoice: networkItem.total || networkItem.totalAmount || networkItem.netAmount || '',
+      internalNumber: networkItem.internalId || networkItem.internalNumber || '',
+      electronicNumber: networkItem.uuid || networkItem.electronicNumber || networkItem.id || '',
+      sellerTaxNumber: networkItem.issuerTaxNumber || networkItem.sellerTaxNumber || '',
+      sellerName: networkItem.issuerName || networkItem.sellerName || '',
+      sellerAddress: networkItem.issuerAddress || networkItem.sellerAddress || 'غير محدد',
+      buyerTaxNumber: networkItem.receiverTaxNumber || networkItem.buyerTaxNumber || '',
+      buyerName: networkItem.receiverName || networkItem.buyerName || '',
+      buyerAddress: networkItem.receiverAddress || networkItem.buyerAddress || 'غير محدد',
+      purchaseOrderRef: networkItem.purchaseOrderReference || networkItem.submissionId || '',
+      purchaseOrderDesc: networkItem.purchaseOrderDescription || '',
+      salesOrderRef: networkItem.salesOrderReference || '',
+      electronicSignature: 'موقع إلكترونياً',
+      foodDrugGuide: networkItem.foodDrugGuide || '',
+      externalLink: this.generateExternalLink({ 
+        electronicNumber: networkItem.uuid || networkItem.id,
+        submissionId: networkItem.submissionId 
+      }),
+      issueTime: networkItem.timeIssued || '',
+      totalAmount: networkItem.total || networkItem.totalAmount || '',
+      currency: networkItem.currency || 'EGP',
+      submissionId: networkItem.submissionId || '',
+      details: []
+    };
+  }
+  
+  calculateInvoiceValue(networkItem) {
+    const total = parseFloat(networkItem.total || networkItem.totalAmount || 0);
+    const vat = parseFloat(networkItem.vatAmount || networkItem.totalTaxAmount || 0);
+    
+    if (total > 0 && vat > 0) {
+      return this.formatAmount(total - vat);
+    }
+    
+    return networkItem.netAmount || networkItem.subtotal || this.formatAmount(total);
+  }
+  
+  setupOptimizedMutationObserver() {
+    // More targeted mutation observer with better performance
+    this.observer = new MutationObserver((mutations) => {
+      let shouldRescan = false;
+      let hasInvoiceChanges = false;
+      
+      // Use document fragment for better performance
+      for (const mutation of mutations) {
+        if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+          for (const node of mutation.addedNodes) {
+            if (node.nodeType === Node.ELEMENT_NODE) {
+              // More specific selectors to reduce false positives
+              if (this.isInvoiceRelatedNode(node)) {
+                hasInvoiceChanges = true;
+                shouldRescan = true;
+                break;
+              }
+            }
+          }
+        }
+        
+        if (shouldRescan) break;
+      }
       
       if (shouldRescan && !this.isProcessingAllPages) {
+        // Debounce with shorter delay for faster response
         clearTimeout(this.rescanTimeout);
-        this.rescanTimeout = setTimeout(() => this.scanForInvoices(), 800);
+        this.rescanTimeout = setTimeout(() => {
+          if (hasInvoiceChanges) {
+            this.scanForInvoices();
+          }
+        }, 300); // Reduced from 800ms to 300ms
       }
     });
     
     this.observer.observe(document.body, {
       childList: true,
-      subtree: true
+      subtree: true,
+      // Only observe what we need
+      attributes: false,
+      characterData: false
     });
   }
   
-  scanForInvoices() {
+  isInvoiceRelatedNode(node) {
+    const invoiceSelectors = [
+      'ms-DetailsRow',
+      'ms-List-cell',
+      'ms-DetailsList',
+      'internalId-link',
+      'griCellTitle'
+    ];
+    
+    return invoiceSelectors.some(selector => 
+      node.classList?.contains(selector) || 
+      node.querySelector?.(`.${selector}`)
+    );
+  }
+  
+  async scanForInvoices() {
     try {
-      console.log('ETA Exporter: Starting invoice scan...');
-      this.invoiceData = [];
+      console.log('ETA Exporter: Starting optimized invoice scan...');
       
-      // Extract pagination info first
+      // First, try to get data from network cache
+      const networkData = this.tryGetFromNetworkCache();
+      if (networkData && networkData.length > 0) {
+        this.invoiceData = networkData;
+        this.extractPaginationInfo();
+        console.log(`ETA Exporter: Used cached network data: ${this.invoiceData.length} invoices`);
+        return;
+      }
+      
+      // Fallback to DOM scraping with optimizations
+      this.invoiceData = [];
       this.extractPaginationInfo();
       
-      // Find invoice rows
-      const rows = this.getVisibleInvoiceRows();
+      // Use more efficient DOM querying
+      const rows = await this.getVisibleInvoiceRowsOptimized();
       console.log(`ETA Exporter: Found ${rows.length} visible invoice rows on page ${this.currentPage}`);
       
       if (rows.length === 0) {
         console.warn('ETA Exporter: No invoice rows found. Trying alternative selectors...');
-        const alternativeRows = this.getAlternativeInvoiceRows();
+        const alternativeRows = await this.getAlternativeInvoiceRowsOptimized();
         console.log(`ETA Exporter: Found ${alternativeRows.length} rows with alternative selectors`);
-        alternativeRows.forEach((row, index) => {
-          const invoiceData = this.extractDataFromRow(row, index + 1);
-          if (this.isValidInvoiceData(invoiceData)) {
-            this.invoiceData.push(invoiceData);
-          }
-        });
+        
+        // Process in batches for better performance
+        await this.processBatchedRows(alternativeRows);
       } else {
-        rows.forEach((row, index) => {
-          const invoiceData = this.extractDataFromRow(row, index + 1);
-          if (this.isValidInvoiceData(invoiceData)) {
-            this.invoiceData.push(invoiceData);
-          }
-        });
+        await this.processBatchedRows(rows);
       }
       
       console.log(`ETA Exporter: Successfully extracted ${this.invoiceData.length} valid invoices from page ${this.currentPage}`);
@@ -93,8 +285,33 @@ class ETAContentScript {
     }
   }
   
-  getVisibleInvoiceRows() {
-    // Primary selectors for invoice rows
+  tryGetFromNetworkCache() {
+    // Look for recent cached network data
+    const now = Date.now();
+    const maxAge = 30000; // 30 seconds
+    
+    for (const [key, cached] of this.cachedNetworkData.entries()) {
+      if (now - cached.timestamp < maxAge && this.isInvoiceListResponse(cached.data)) {
+        return this.extractInvoicesFromCachedData(cached.data);
+      }
+    }
+    
+    return null;
+  }
+  
+  extractInvoicesFromCachedData(data) {
+    let invoices = [];
+    
+    if (data.items) invoices = data.items;
+    else if (data.documents) invoices = data.documents;
+    else if (data.invoices) invoices = data.invoices;
+    else if (Array.isArray(data)) invoices = data;
+    
+    return invoices.map((item, index) => this.transformNetworkDataToInvoice(item, index + 1));
+  }
+  
+  async getVisibleInvoiceRowsOptimized() {
+    // Use more efficient selectors and batch DOM queries
     const selectors = [
       '.ms-DetailsRow[role="row"]',
       '.ms-List-cell[role="gridcell"]',
@@ -103,10 +320,14 @@ class ETAContentScript {
       '[role="row"]'
     ];
     
+    // Try selectors in order of specificity
     for (const selector of selectors) {
-      const rows = document.querySelectorAll(selector);
-      const visibleRows = Array.from(rows).filter(row => 
-        this.isRowVisible(row) && this.hasInvoiceData(row)
+      const elements = document.querySelectorAll(selector);
+      if (elements.length === 0) continue;
+      
+      // Use Array.from with filter for better performance
+      const visibleRows = Array.from(elements).filter(row => 
+        this.isRowVisibleOptimized(row) && this.hasInvoiceDataOptimized(row)
       );
       
       if (visibleRows.length > 0) {
@@ -118,8 +339,7 @@ class ETAContentScript {
     return [];
   }
   
-  getAlternativeInvoiceRows() {
-    // Alternative selectors when primary ones fail
+  async getAlternativeInvoiceRowsOptimized() {
     const alternativeSelectors = [
       'tr[role="row"]',
       '.ms-List-cell',
@@ -128,228 +348,84 @@ class ETAContentScript {
       'div[role="gridcell"]'
     ];
     
-    const allRows = [];
+    const allRows = new Set(); // Use Set to avoid duplicates
     
     for (const selector of alternativeSelectors) {
       const elements = document.querySelectorAll(selector);
-      Array.from(elements).forEach(element => {
+      for (const element of elements) {
         const row = element.closest('[role="row"]') || element.parentElement;
-        if (row && this.hasInvoiceData(row) && !allRows.includes(row)) {
-          allRows.push(row);
+        if (row && this.hasInvoiceDataOptimized(row) && this.isRowVisibleOptimized(row)) {
+          allRows.add(row);
         }
-      });
+      }
     }
     
-    return allRows.filter(row => this.isRowVisible(row));
+    return Array.from(allRows);
   }
   
-  isRowVisible(row) {
+  isRowVisibleOptimized(row) {
     if (!row) return false;
+    
+    // Use more efficient visibility check
+    const style = row.style;
+    if (style.display === 'none' || style.visibility === 'hidden') return false;
     
     const rect = row.getBoundingClientRect();
-    const style = window.getComputedStyle(row);
-    
-    return (
-      rect.width > 0 && 
-      rect.height > 0 &&
-      style.display !== 'none' &&
-      style.visibility !== 'hidden' &&
-      style.opacity !== '0'
-    );
+    return rect.width > 0 && rect.height > 0;
   }
   
-  hasInvoiceData(row) {
+  hasInvoiceDataOptimized(row) {
     if (!row) return false;
     
-    // Check for electronic number or internal number
-    const electronicNumber = row.querySelector('.internalId-link a, [data-automation-key="uuid"] a, .griCellTitle');
-    const internalNumber = row.querySelector('.griCellSubTitle, [data-automation-key="uuid"] .griCellSubTitle');
-    const totalAmount = row.querySelector('[data-automation-key="total"], .griCellTitleGray');
+    // Cache DOM queries for better performance
+    const cachedElements = row._invoiceElements || this.cacheInvoiceElements(row);
     
-    return !!(electronicNumber?.textContent?.trim() || 
-              internalNumber?.textContent?.trim() || 
-              totalAmount?.textContent?.trim());
+    return !!(cachedElements.electronicNumber?.textContent?.trim() || 
+              cachedElements.internalNumber?.textContent?.trim() || 
+              cachedElements.totalAmount?.textContent?.trim());
   }
   
-  extractPaginationInfo() {
-    try {
-      // Extract total count from "Results: 304" text
-      this.totalCount = this.extractTotalCount();
+  cacheInvoiceElements(row) {
+    const elements = {
+      electronicNumber: row.querySelector('.internalId-link a, [data-automation-key="uuid"] a, .griCellTitle'),
+      internalNumber: row.querySelector('.griCellSubTitle, [data-automation-key="uuid"] .griCellSubTitle'),
+      totalAmount: row.querySelector('[data-automation-key="total"], .griCellTitleGray')
+    };
+    
+    // Cache for future use
+    row._invoiceElements = elements;
+    return elements;
+  }
+  
+  async processBatchedRows(rows) {
+    const batchSize = 10; // Process 10 rows at a time
+    
+    for (let i = 0; i < rows.length; i += batchSize) {
+      const batch = rows.slice(i, i + batchSize);
       
-      // Extract current page from pagination buttons
-      this.currentPage = this.extractCurrentPage();
+      // Process batch in parallel
+      const batchPromises = batch.map((row, batchIndex) => {
+        const globalIndex = i + batchIndex + 1;
+        return this.extractDataFromRowOptimized(row, globalIndex);
+      });
       
-      // Detect results per page
-      this.resultsPerPage = this.detectResultsPerPage();
+      const batchResults = await Promise.all(batchPromises);
       
-      // Calculate total pages
-      this.totalPages = Math.ceil(this.totalCount / this.resultsPerPage);
+      // Filter valid results and add to invoice data
+      const validInvoices = batchResults.filter(invoice => this.isValidInvoiceData(invoice));
+      this.invoiceData.push(...validInvoices);
       
-      // Ensure we have valid values
-      this.currentPage = Math.max(this.currentPage, 1);
-      this.totalPages = Math.max(this.totalPages, this.currentPage);
-      this.totalCount = Math.max(this.totalCount, this.invoiceData.length);
-      
-      console.log(`ETA Exporter: Page ${this.currentPage} of ${this.totalPages}, Total: ${this.totalCount} invoices (${this.resultsPerPage} per page)`);
-      
-    } catch (error) {
-      console.warn('ETA Exporter: Error extracting pagination info:', error);
-      // Set defaults
-      this.currentPage = 1;
-      this.totalPages = this.findMaxPageNumber() || 1;
-      this.totalCount = this.invoiceData.length;
+      // Yield control to prevent blocking
+      if (i + batchSize < rows.length) {
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
     }
   }
   
-  extractTotalCount() {
-    // Look for "Results: 304" pattern at the bottom of the page
-    const resultElements = document.querySelectorAll('*');
-    
-    for (const element of resultElements) {
-      const text = element.textContent || '';
-      
-      // Look for "Results: XXX" pattern (exact match from screenshot)
-      const resultsMatch = text.match(/Results:\s*(\d+)/i);
-      if (resultsMatch) {
-        const count = parseInt(resultsMatch[1]);
-        if (count > 0) {
-          console.log(`ETA Exporter: Found total count ${count} from "Results:" text`);
-          return count;
-        }
-      }
-      
-      // Look for other patterns
-      const patterns = [
-        /(\d+)\s*results/i,
-        /total:\s*(\d+)/i,
-        /النتائج:\s*(\d+)/i,
-        /(\d+)\s*نتيجة/i,
-        /من\s*(\d+)/i,
-        /إجمالي:\s*(\d+)/i
-      ];
-      
-      for (const pattern of patterns) {
-        const match = text.match(pattern);
-        if (match) {
-          const count = parseInt(match[1]);
-          if (count > 0) {
-            console.log(`ETA Exporter: Found total count ${count} using pattern`);
-            return count;
-          }
-        }
-      }
-    }
-    
-    // Fallback: look in pagination area
-    const paginationArea = document.querySelector('.ms-CommandBar, [class*="pagination"], [class*="pager"]');
-    if (paginationArea) {
-      const text = paginationArea.textContent || '';
-      const match = text.match(/(\d+)\s*-\s*(\d+)\s*of\s*(\d+)|(\d+)\s*-\s*(\d+)\s*من\s*(\d+)/i);
-      if (match) {
-        const total = parseInt(match[3] || match[6]);
-        if (total > 0) {
-          console.log(`ETA Exporter: Found total count ${total} from pagination area`);
-          return total;
-        }
-      }
-    }
-    
-    return 0;
-  }
-  
-  detectResultsPerPage() {
-    const currentPageRows = this.invoiceData.length;
-    
-    // If we're not on the last page, use current row count
-    if (this.currentPage < this.totalPages && currentPageRows > 0) {
-      return currentPageRows;
-    }
-    
-    // Common page sizes to check
-    const commonPageSizes = [10, 20, 25, 50, 100];
-    
-    // If we have rows, find the closest page size
-    if (currentPageRows > 0) {
-      for (const size of commonPageSizes) {
-        if (currentPageRows <= size) {
-          return size;
-        }
-      }
-      return currentPageRows;
-    }
-    
-    // Default assumption based on ETA portal
-    return 50;
-  }
-  
-  extractCurrentPage() {
-    // Look for active/selected page button
-    const activePageSelectors = [
-      '.ms-Button--primary[aria-pressed="true"]',
-      '[aria-current="page"]',
-      '.active',
-      '.selected',
-      '.current',
-      '[class*="active"]',
-      '[class*="selected"]'
-    ];
-    
-    for (const selector of activePageSelectors) {
-      const activeButton = document.querySelector(selector);
-      if (activeButton) {
-        const pageText = activeButton.textContent?.trim();
-        const pageNum = parseInt(pageText);
-        if (!isNaN(pageNum) && pageNum > 0) {
-          return pageNum;
-        }
-      }
-    }
-    
-    // Look for numbered pagination buttons and find the active one
-    const pageButtons = document.querySelectorAll('button, a');
-    for (const button of pageButtons) {
-      const text = button.textContent?.trim();
-      const pageNum = parseInt(text);
-      
-      if (!isNaN(pageNum) && pageNum > 0) {
-        // Check if this button looks active
-        const classes = button.className || '';
-        const ariaPressed = button.getAttribute('aria-pressed');
-        const ariaCurrent = button.getAttribute('aria-current');
-        
-        if (ariaPressed === 'true' || ariaCurrent === 'page' || 
-            classes.includes('active') || classes.includes('selected') ||
-            classes.includes('primary')) {
-          return pageNum;
-        }
-      }
-    }
-    
-    return 1;
-  }
-  
-  findMaxPageNumber() {
-    const pageButtons = document.querySelectorAll('button, a');
-    let maxPage = 1;
-    
-    pageButtons.forEach(btn => {
-      const buttonText = btn.textContent?.trim();
-      const pageNum = parseInt(buttonText);
-      
-      if (!isNaN(pageNum) && pageNum > maxPage) {
-        maxPage = pageNum;
-      }
-    });
-    
-    return maxPage;
-  }
-  
-  extractDataFromRow(row, index) {
+  async extractDataFromRowOptimized(row, index) {
     const invoice = {
       index: index,
       pageNumber: this.currentPage,
-      
-      // Main invoice data matching Excel format
       serialNumber: index,
       viewButton: 'عرض',
       documentType: 'فاتورة',
@@ -376,8 +452,6 @@ class ETAContentScript {
       electronicSignature: 'موقع إلكترونياً',
       foodDrugGuide: '',
       externalLink: '',
-      
-      // Additional fields
       issueTime: '',
       totalAmount: '',
       currency: 'EGP',
@@ -386,10 +460,15 @@ class ETAContentScript {
     };
     
     try {
-      // Try to extract data using different methods
-      this.extractUsingDataAttributes(row, invoice);
-      this.extractUsingCellPositions(row, invoice);
-      this.extractUsingTextContent(row, invoice);
+      // Use cached elements if available
+      const cachedElements = row._invoiceElements || this.cacheInvoiceElements(row);
+      
+      // Extract using optimized methods
+      await Promise.all([
+        this.extractUsingDataAttributesOptimized(row, invoice, cachedElements),
+        this.extractUsingCellPositionsOptimized(row, invoice),
+        this.extractUsingTextContentOptimized(row, invoice)
+      ]);
       
       // Generate external link if we have electronic number
       if (invoice.electronicNumber) {
@@ -403,21 +482,21 @@ class ETAContentScript {
     return invoice;
   }
   
-  extractUsingDataAttributes(row, invoice) {
-    // Method 1: Using data-automation-key attributes
+  async extractUsingDataAttributesOptimized(row, invoice, cachedElements) {
     const cells = row.querySelectorAll('.ms-DetailsRow-cell, [data-automation-key]');
     
-    cells.forEach(cell => {
+    // Process cells in parallel where possible
+    const cellProcessingPromises = Array.from(cells).map(async (cell) => {
       const key = cell.getAttribute('data-automation-key');
       
       switch (key) {
         case 'uuid':
-          const electronicLink = cell.querySelector('.internalId-link a.griCellTitle, a');
+          const electronicLink = cachedElements.electronicNumber || cell.querySelector('.internalId-link a.griCellTitle, a');
           if (electronicLink) {
             invoice.electronicNumber = electronicLink.textContent?.trim() || '';
           }
           
-          const internalNumberElement = cell.querySelector('.griCellSubTitle');
+          const internalNumberElement = cachedElements.internalNumber || cell.querySelector('.griCellSubTitle');
           if (internalNumberElement) {
             invoice.internalNumber = internalNumberElement.textContent?.trim() || '';
           }
@@ -449,7 +528,7 @@ class ETAContentScript {
           break;
           
         case 'total':
-          const totalElement = cell.querySelector('.griCellTitleGray, .griCellTitle');
+          const totalElement = cachedElements.totalAmount || cell.querySelector('.griCellTitleGray, .griCellTitle');
           if (totalElement) {
             const totalText = totalElement.textContent?.trim() || '';
             invoice.totalAmount = totalText;
@@ -525,77 +604,238 @@ class ETAContentScript {
           break;
       }
     });
+    
+    await Promise.all(cellProcessingPromises);
   }
   
-  extractUsingCellPositions(row, invoice) {
-    // Method 2: Using cell positions (fallback)
+  async extractUsingCellPositionsOptimized(row, invoice) {
     const cells = row.querySelectorAll('.ms-DetailsRow-cell, td, [role="gridcell"]');
     
     if (cells.length >= 8) {
-      // Try to extract based on typical column positions
+      // Extract in parallel where possible
+      const extractionPromises = [];
+      
       if (!invoice.electronicNumber) {
-        const firstCell = cells[0];
-        const link = firstCell.querySelector('a');
-        if (link) {
-          invoice.electronicNumber = link.textContent?.trim() || '';
-        }
+        extractionPromises.push(this.extractElectronicNumber(cells[0], invoice));
       }
       
       if (!invoice.totalAmount) {
-        // Total amount is usually in one of the middle columns
-        for (let i = 2; i < Math.min(6, cells.length); i++) {
-          const cellText = cells[i].textContent?.trim() || '';
-          if (cellText.includes('EGP') || /^\d+[\d,]*\.?\d*$/.test(cellText.replace(/[,٬]/g, ''))) {
-            invoice.totalAmount = cellText;
-            invoice.totalInvoice = cellText;
-            break;
-          }
-        }
+        extractionPromises.push(this.extractTotalAmount(cells, invoice));
       }
       
       if (!invoice.issueDate) {
-        // Date is usually in one of the early columns
-        for (let i = 1; i < Math.min(4, cells.length); i++) {
-          const cellText = cells[i].textContent?.trim() || '';
-          if (cellText.includes('/') && cellText.length >= 8) {
-            invoice.issueDate = cellText;
-            invoice.submissionDate = cellText;
-            break;
-          }
-        }
+        extractionPromises.push(this.extractIssueDate(cells, invoice));
+      }
+      
+      await Promise.all(extractionPromises);
+    }
+  }
+  
+  async extractElectronicNumber(cell, invoice) {
+    const link = cell.querySelector('a');
+    if (link) {
+      invoice.electronicNumber = link.textContent?.trim() || '';
+    }
+  }
+  
+  async extractTotalAmount(cells, invoice) {
+    for (let i = 2; i < Math.min(6, cells.length); i++) {
+      const cellText = cells[i].textContent?.trim() || '';
+      if (cellText.includes('EGP') || /^\d+[\d,]*\.?\d*$/.test(cellText.replace(/[,٬]/g, ''))) {
+        invoice.totalAmount = cellText;
+        invoice.totalInvoice = cellText;
+        break;
       }
     }
   }
   
-  extractUsingTextContent(row, invoice) {
-    // Method 3: Extract from all text content (last resort)
+  async extractIssueDate(cells, invoice) {
+    for (let i = 1; i < Math.min(4, cells.length); i++) {
+      const cellText = cells[i].textContent?.trim() || '';
+      if (cellText.includes('/') && cellText.length >= 8) {
+        invoice.issueDate = cellText;
+        invoice.submissionDate = cellText;
+        break;
+      }
+    }
+  }
+  
+  async extractUsingTextContentOptimized(row, invoice) {
     const allText = row.textContent || '';
     
-    // Extract electronic number pattern
-    if (!invoice.electronicNumber) {
-      const electronicMatch = allText.match(/[A-Z0-9]{20,30}/);
-      if (electronicMatch) {
-        invoice.electronicNumber = electronicMatch[0];
+    // Use parallel regex matching
+    const patterns = [
+      { regex: /[A-Z0-9]{20,30}/, field: 'electronicNumber' },
+      { regex: /\d{1,2}\/\d{1,2}\/\d{4}/, field: 'issueDate' },
+      { regex: /\d+[,٬]?\d*\.?\d*\s*EGP/, field: 'totalAmount' }
+    ];
+    
+    patterns.forEach(({ regex, field }) => {
+      if (!invoice[field]) {
+        const match = allText.match(regex);
+        if (match) {
+          invoice[field] = match[0];
+          if (field === 'issueDate') {
+            invoice.submissionDate = match[0];
+          } else if (field === 'totalAmount') {
+            invoice.totalInvoice = match[0];
+          }
+        }
+      }
+    });
+  }
+  
+  extractPaginationInfo() {
+    try {
+      this.totalCount = this.extractTotalCount();
+      this.currentPage = this.extractCurrentPage();
+      this.resultsPerPage = this.detectResultsPerPage();
+      this.totalPages = Math.ceil(this.totalCount / this.resultsPerPage);
+      
+      this.currentPage = Math.max(this.currentPage, 1);
+      this.totalPages = Math.max(this.totalPages, this.currentPage);
+      this.totalCount = Math.max(this.totalCount, this.invoiceData.length);
+      
+      console.log(`ETA Exporter: Page ${this.currentPage} of ${this.totalPages}, Total: ${this.totalCount} invoices (${this.resultsPerPage} per page)`);
+      
+    } catch (error) {
+      console.warn('ETA Exporter: Error extracting pagination info:', error);
+      this.currentPage = 1;
+      this.totalPages = this.findMaxPageNumber() || 1;
+      this.totalCount = this.invoiceData.length;
+    }
+  }
+  
+  extractTotalCount() {
+    const resultElements = document.querySelectorAll('*');
+    
+    for (const element of resultElements) {
+      const text = element.textContent || '';
+      
+      const resultsMatch = text.match(/Results:\s*(\d+)/i);
+      if (resultsMatch) {
+        const count = parseInt(resultsMatch[1]);
+        if (count > 0) {
+          console.log(`ETA Exporter: Found total count ${count} from "Results:" text`);
+          return count;
+        }
+      }
+      
+      const patterns = [
+        /(\d+)\s*results/i,
+        /total:\s*(\d+)/i,
+        /النتائج:\s*(\d+)/i,
+        /(\d+)\s*نتيجة/i,
+        /من\s*(\d+)/i,
+        /إجمالي:\s*(\d+)/i
+      ];
+      
+      for (const pattern of patterns) {
+        const match = text.match(pattern);
+        if (match) {
+          const count = parseInt(match[1]);
+          if (count > 0) {
+            console.log(`ETA Exporter: Found total count ${count} using pattern`);
+            return count;
+          }
+        }
       }
     }
     
-    // Extract date pattern
-    if (!invoice.issueDate) {
-      const dateMatch = allText.match(/\d{1,2}\/\d{1,2}\/\d{4}/);
-      if (dateMatch) {
-        invoice.issueDate = dateMatch[0];
-        invoice.submissionDate = dateMatch[0];
+    const paginationArea = document.querySelector('.ms-CommandBar, [class*="pagination"], [class*="pager"]');
+    if (paginationArea) {
+      const text = paginationArea.textContent || '';
+      const match = text.match(/(\d+)\s*-\s*(\d+)\s*of\s*(\d+)|(\d+)\s*-\s*(\d+)\s*من\s*(\d+)/i);
+      if (match) {
+        const total = parseInt(match[3] || match[6]);
+        if (total > 0) {
+          console.log(`ETA Exporter: Found total count ${total} from pagination area`);
+          return total;
+        }
       }
     }
     
-    // Extract amount pattern
-    if (!invoice.totalAmount) {
-      const amountMatch = allText.match(/\d+[,٬]?\d*\.?\d*\s*EGP/);
-      if (amountMatch) {
-        invoice.totalAmount = amountMatch[0];
-        invoice.totalInvoice = amountMatch[0];
+    return 0;
+  }
+  
+  detectResultsPerPage() {
+    const currentPageRows = this.invoiceData.length;
+    
+    if (this.currentPage < this.totalPages && currentPageRows > 0) {
+      return currentPageRows;
+    }
+    
+    const commonPageSizes = [10, 20, 25, 50, 100];
+    
+    if (currentPageRows > 0) {
+      for (const size of commonPageSizes) {
+        if (currentPageRows <= size) {
+          return size;
+        }
+      }
+      return currentPageRows;
+    }
+    
+    return 50;
+  }
+  
+  extractCurrentPage() {
+    const activePageSelectors = [
+      '.ms-Button--primary[aria-pressed="true"]',
+      '[aria-current="page"]',
+      '.active',
+      '.selected',
+      '.current',
+      '[class*="active"]',
+      '[class*="selected"]'
+    ];
+    
+    for (const selector of activePageSelectors) {
+      const activeButton = document.querySelector(selector);
+      if (activeButton) {
+        const pageText = activeButton.textContent?.trim();
+        const pageNum = parseInt(pageText);
+        if (!isNaN(pageNum) && pageNum > 0) {
+          return pageNum;
+        }
       }
     }
+    
+    const pageButtons = document.querySelectorAll('button, a');
+    for (const button of pageButtons) {
+      const text = button.textContent?.trim();
+      const pageNum = parseInt(text);
+      
+      if (!isNaN(pageNum) && pageNum > 0) {
+        const classes = button.className || '';
+        const ariaPressed = button.getAttribute('aria-pressed');
+        const ariaCurrent = button.getAttribute('aria-current');
+        
+        if (ariaPressed === 'true' || ariaCurrent === 'page' || 
+            classes.includes('active') || classes.includes('selected') ||
+            classes.includes('primary')) {
+          return pageNum;
+        }
+      }
+    }
+    
+    return 1;
+  }
+  
+  findMaxPageNumber() {
+    const pageButtons = document.querySelectorAll('button, a');
+    let maxPage = 1;
+    
+    pageButtons.forEach(btn => {
+      const buttonText = btn.textContent?.trim();
+      const pageNum = parseInt(buttonText);
+      
+      if (!isNaN(pageNum) && pageNum > maxPage) {
+        maxPage = pageNum;
+      }
+    });
+    
+    return maxPage;
   }
   
   parseAmount(amountText) {
@@ -634,24 +874,21 @@ class ETAContentScript {
       this.isProcessingAllPages = true;
       this.allPagesData = [];
       
-      console.log(`ETA Exporter: Starting to load ALL pages. Total invoices to load: ${this.totalCount}`);
+      console.log(`ETA Exporter: Starting optimized ALL pages loading. Total invoices: ${this.totalCount}`);
       
-      // Always start from page 1 to ensure we get everything
-      await this.navigateToFirstPage();
+      await this.navigateToFirstPageOptimized();
       
       let processedInvoices = 0;
       let currentPageNum = 1;
-      let maxAttempts = 1000; // Safety limit
+      let maxAttempts = Math.min(this.totalPages * 2, 500); // Safety limit
       let attempts = 0;
       
-      // Continue until we've processed all invoices or reached limits
       while (processedInvoices < this.totalCount && attempts < maxAttempts) {
         attempts++;
         
         try {
           console.log(`ETA Exporter: Processing page ${currentPageNum}, attempt ${attempts}...`);
           
-          // Update progress
           if (this.progressCallback) {
             this.progressCallback({
               currentPage: currentPageNum,
@@ -661,14 +898,11 @@ class ETAContentScript {
             });
           }
           
-          // Wait for page to load completely
-          await this.waitForPageLoadComplete();
+          await this.waitForPageLoadCompleteOptimized();
           
-          // Scan invoices on current page
           this.scanForInvoices();
           
           if (this.invoiceData.length > 0) {
-            // Add page data to collection with correct serial numbers
             const pageData = this.invoiceData.map((invoice, index) => ({
               ...invoice,
               pageNumber: currentPageNum,
@@ -684,27 +918,26 @@ class ETAContentScript {
             console.warn(`ETA Exporter: No invoices found on page ${currentPageNum}`);
           }
           
-          // Check if we've got all invoices
           if (processedInvoices >= this.totalCount) {
             console.log(`ETA Exporter: Successfully loaded all ${processedInvoices} invoices!`);
             break;
           }
           
-          // Try to navigate to next page
-          const navigatedToNext = await this.navigateToNextPageRobust();
+          const navigatedToNext = await this.navigateToNextPageOptimized();
           if (!navigatedToNext) {
             console.log('ETA Exporter: Cannot navigate to next page, stopping');
             break;
           }
           
           currentPageNum++;
-          await this.delay(2000); // Wait between pages
+          
+          // Minimal delay between pages
+          await this.delay(500); // Reduced from 2000ms to 500ms
           
         } catch (error) {
           console.error(`Error processing page ${currentPageNum}:`, error);
           
-          // Try to continue to next page
-          const navigatedToNext = await this.navigateToNextPageRobust();
+          const navigatedToNext = await this.navigateToNextPageOptimized();
           if (!navigatedToNext) {
             break;
           }
@@ -734,53 +967,48 @@ class ETAContentScript {
     }
   }
   
-  async navigateToFirstPage() {
+  async navigateToFirstPageOptimized() {
     console.log('ETA Exporter: Navigating to first page...');
     
-    // Look for page 1 button
     const pageButtons = document.querySelectorAll('button, a');
     for (const button of pageButtons) {
       const buttonText = button.textContent?.trim();
       if (buttonText === '1') {
         console.log('ETA Exporter: Clicking page 1 button');
         button.click();
-        await this.delay(3000);
-        await this.waitForPageLoadComplete();
+        await this.delay(1000); // Reduced delay
+        await this.waitForPageLoadCompleteOptimized();
         this.extractPaginationInfo();
         return;
       }
     }
     
-    // If no page 1 button, we might already be on page 1
     this.extractPaginationInfo();
     if (this.currentPage === 1) {
       console.log('ETA Exporter: Already on page 1');
       return;
     }
     
-    // Try to navigate using previous buttons until we reach page 1
     while (this.currentPage > 1) {
-      const navigated = await this.navigateToPreviousPage();
+      const navigated = await this.navigateToPreviousPageOptimized();
       if (!navigated) break;
-      await this.delay(2000);
-      await this.waitForPageLoadComplete();
+      await this.delay(1000);
+      await this.waitForPageLoadCompleteOptimized();
       this.extractPaginationInfo();
     }
   }
   
-  async navigateToNextPageRobust() {
+  async navigateToNextPageOptimized() {
     console.log('ETA Exporter: Attempting to navigate to next page...');
     
-    // Method 1: Try to find and click next button
-    const nextButton = this.findNextButton();
+    const nextButton = this.findNextButtonOptimized();
     if (nextButton && !nextButton.disabled) {
       console.log('ETA Exporter: Found next button, clicking...');
       nextButton.click();
-      await this.delay(3000);
+      await this.delay(1000); // Reduced delay
       return true;
     }
     
-    // Method 2: Try to find the next page number button
     const currentPageNum = this.currentPage;
     const nextPageNum = currentPageNum + 1;
     
@@ -790,12 +1018,11 @@ class ETAContentScript {
       if (parseInt(buttonText) === nextPageNum) {
         console.log(`ETA Exporter: Found page ${nextPageNum} button, clicking...`);
         button.click();
-        await this.delay(3000);
+        await this.delay(1000);
         return true;
       }
     }
     
-    // Method 3: Try to find any button that might be "next"
     for (const button of pageButtons) {
       const buttonText = button.textContent?.toLowerCase().trim();
       const ariaLabel = button.getAttribute('aria-label')?.toLowerCase() || '';
@@ -807,7 +1034,7 @@ class ETAContentScript {
         if (!button.disabled && !button.getAttribute('disabled')) {
           console.log('ETA Exporter: Found potential next button, clicking...');
           button.click();
-          await this.delay(3000);
+          await this.delay(1000);
           return true;
         }
       }
@@ -817,24 +1044,22 @@ class ETAContentScript {
     return false;
   }
   
-  findNextButton() {
+  findNextButtonOptimized() {
     const nextSelectors = [
-      'button[aria-label*="Next"]',
-      'button[aria-label*="next"]',
-      'button[title*="Next"]',
-      'button[title*="next"]',
-      'button[aria-label*="التالي"]',
-      'button:has([data-icon-name="ChevronRight"])',
-      'button:has([class*="chevron-right"])',
-      '.ms-Button:has([data-icon-name="ChevronRight"])',
-      'button:has(i[class*="right"])',
-      'button:has(span[class*="right"])'
+      'button[aria-label*="Next"]:not([disabled])',
+      'button[aria-label*="next"]:not([disabled])',
+      'button[title*="Next"]:not([disabled])',
+      'button[title*="next"]:not([disabled])',
+      'button[aria-label*="التالي"]:not([disabled])',
+      'button:has([data-icon-name="ChevronRight"]):not([disabled])',
+      'button:has([class*="chevron-right"]):not([disabled])',
+      '.ms-Button:has([data-icon-name="ChevronRight"]):not([disabled])'
     ];
     
     for (const selector of nextSelectors) {
       try {
         const button = document.querySelector(selector);
-        if (button && !button.disabled && !button.getAttribute('disabled')) {
+        if (button) {
           const style = window.getComputedStyle(button);
           if (style.display !== 'none' && style.visibility !== 'hidden') {
             return button;
@@ -845,17 +1070,13 @@ class ETAContentScript {
       }
     }
     
-    // Fallback: look for buttons with right arrow icons or text
-    const allButtons = document.querySelectorAll('button');
+    const allButtons = document.querySelectorAll('button:not([disabled])');
     for (const button of allButtons) {
-      if (button.disabled || button.getAttribute('disabled')) continue;
-      
       const hasRightArrow = button.querySelector('[data-icon-name="ChevronRight"], [class*="chevron-right"], [class*="arrow-right"]');
       if (hasRightArrow) {
         return button;
       }
       
-      // Check button text for next indicators
       const text = button.textContent?.toLowerCase() || '';
       if (text.includes('next') || text.includes('التالي') || text === '>' || text === '»') {
         return button;
@@ -865,27 +1086,27 @@ class ETAContentScript {
     return null;
   }
   
-  async navigateToPreviousPage() {
+  async navigateToPreviousPageOptimized() {
     const prevSelectors = [
-      'button[aria-label*="Previous"]',
-      'button[aria-label*="previous"]',
-      'button[title*="Previous"]',
-      'button[title*="previous"]',
-      'button[aria-label*="السابق"]',
-      'button:has([data-icon-name="ChevronLeft"])',
-      'button:has([class*="chevron-left"])',
-      '.ms-Button:has([data-icon-name="ChevronLeft"])'
+      'button[aria-label*="Previous"]:not([disabled])',
+      'button[aria-label*="previous"]:not([disabled])',
+      'button[title*="Previous"]:not([disabled])',
+      'button[title*="previous"]:not([disabled])',
+      'button[aria-label*="السابق"]:not([disabled])',
+      'button:has([data-icon-name="ChevronLeft"]):not([disabled])',
+      'button:has([class*="chevron-left"]):not([disabled])',
+      '.ms-Button:has([data-icon-name="ChevronLeft"]):not([disabled])'
     ];
     
     for (const selector of prevSelectors) {
       try {
         const button = document.querySelector(selector);
-        if (button && !button.disabled) {
+        if (button) {
           const style = window.getComputedStyle(button);
           if (style.display !== 'none' && style.visibility !== 'hidden') {
             console.log('ETA Exporter: Clicking previous button');
             button.click();
-            await this.delay(2000);
+            await this.delay(1000);
             return true;
           }
         }
@@ -898,11 +1119,24 @@ class ETAContentScript {
     return false;
   }
   
-  async waitForPageLoadComplete() {
-    console.log('ETA Exporter: Waiting for page load to complete...');
+  async waitForPageLoadCompleteOptimized() {
+    console.log('ETA Exporter: Waiting for optimized page load...');
     
-    // Wait for loading indicators to disappear
-    await this.waitForCondition(() => {
+    // Use Promise.race for faster response
+    await Promise.race([
+      this.waitForLoadingIndicatorsToDisappear(),
+      this.waitForInvoiceRowsToAppear(),
+      this.delay(10000) // Maximum wait time reduced to 10s
+    ]);
+    
+    // Wait for DOM stability with shorter delay
+    await this.delay(1000); // Reduced from 3000ms to 1000ms
+    
+    console.log('ETA Exporter: Optimized page load completed');
+  }
+  
+  async waitForLoadingIndicatorsToDisappear() {
+    return this.waitForConditionOptimized(() => {
       const loadingIndicators = document.querySelectorAll(
         '.LoadingIndicator, .ms-Spinner, [class*="loading"], [class*="spinner"], .ms-Shimmer'
       );
@@ -911,32 +1145,29 @@ class ETAContentScript {
         window.getComputedStyle(el).display !== 'none'
       );
       return !isLoading;
-    }, 20000);
-    
-    // Wait for invoice rows to appear
-    await this.waitForCondition(() => {
-      const rows = this.getVisibleInvoiceRows();
-      return rows.length > 0;
-    }, 20000);
-    
-    // Wait for DOM stability
-    await this.delay(3000);
-    
-    console.log('ETA Exporter: Page load completed');
+    }, 10000);
   }
   
-  async waitForCondition(condition, timeout = 15000) {
+  async waitForInvoiceRowsToAppear() {
+    return this.waitForConditionOptimized(() => {
+      const rows = this.getVisibleInvoiceRowsOptimized();
+      return rows.length > 0;
+    }, 10000);
+  }
+  
+  async waitForConditionOptimized(condition, timeout = 10000) {
     const startTime = Date.now();
+    const checkInterval = 200; // Check every 200ms instead of 500ms
     
     while (Date.now() - startTime < timeout) {
       try {
-        if (condition()) {
+        if (await condition()) {
           return true;
         }
       } catch (error) {
         // Ignore errors in condition check
       }
-      await this.delay(500);
+      await this.delay(checkInterval);
     }
     
     console.warn(`ETA Exporter: Condition timeout after ${timeout}ms`);
@@ -953,7 +1184,7 @@ class ETAContentScript {
   
   async getInvoiceDetails(invoiceId) {
     try {
-      const details = await this.extractInvoiceDetailsFromPage(invoiceId);
+      const details = await this.extractInvoiceDetailsFromPageOptimized(invoiceId);
       return {
         success: true,
         data: details
@@ -968,44 +1199,52 @@ class ETAContentScript {
     }
   }
   
-  async extractInvoiceDetailsFromPage(invoiceId) {
+  async extractInvoiceDetailsFromPageOptimized(invoiceId) {
     const details = [];
     
     try {
-      // Look for details table
       const detailsTable = document.querySelector('.ms-DetailsList, [data-automationid="DetailsList"], table');
       
       if (detailsTable) {
         const rows = detailsTable.querySelectorAll('.ms-DetailsRow[role="row"], tr');
         
-        rows.forEach((row, index) => {
-          const cells = row.querySelectorAll('.ms-DetailsRow-cell, td');
+        // Process rows in batches for better performance
+        const batchSize = 5;
+        for (let i = 0; i < rows.length; i += batchSize) {
+          const batch = Array.from(rows).slice(i, i + batchSize);
           
-          if (cells.length >= 6) {
-            const item = {
-              itemCode: this.extractCellText(cells[0]) || `ITEM-${index + 1}`,
-              description: this.extractCellText(cells[1]) || 'صنف',
-              unitCode: this.extractCellText(cells[2]) || 'EA',
-              unitName: this.extractCellText(cells[3]) || 'قطعة',
-              quantity: this.extractCellText(cells[4]) || '1',
-              unitPrice: this.extractCellText(cells[5]) || '0',
-              totalValue: this.extractCellText(cells[6]) || '0',
-              taxAmount: this.extractCellText(cells[7]) || '0',
-              vatAmount: this.extractCellText(cells[8]) || '0'
-            };
+          const batchPromises = batch.map(async (row, batchIndex) => {
+            const cells = row.querySelectorAll('.ms-DetailsRow-cell, td');
             
-            // Skip header rows
-            if (item.description && 
-                item.description !== 'اسم الصنف' && 
-                item.description !== 'Description' &&
-                item.description.trim() !== '') {
-              details.push(item);
+            if (cells.length >= 6) {
+              const item = {
+                itemCode: this.extractCellText(cells[0]) || `ITEM-${i + batchIndex + 1}`,
+                description: this.extractCellText(cells[1]) || 'صنف',
+                unitCode: this.extractCellText(cells[2]) || 'EA',
+                unitName: this.extractCellText(cells[3]) || 'قطعة',
+                quantity: this.extractCellText(cells[4]) || '1',
+                unitPrice: this.extractCellText(cells[5]) || '0',
+                totalValue: this.extractCellText(cells[6]) || '0',
+                taxAmount: this.extractCellText(cells[7]) || '0',
+                vatAmount: this.extractCellText(cells[8]) || '0'
+              };
+              
+              if (item.description && 
+                  item.description !== 'اسم الصنف' && 
+                  item.description !== 'Description' &&
+                  item.description.trim() !== '') {
+                return item;
+              }
             }
-          }
-        });
+            return null;
+          });
+          
+          const batchResults = await Promise.all(batchPromises);
+          const validItems = batchResults.filter(item => item !== null);
+          details.push(...validItems);
+        }
       }
       
-      // If no details found, create a summary item
       if (details.length === 0) {
         const invoice = this.invoiceData.find(inv => inv.electronicNumber === invoiceId);
         if (invoice) {
@@ -1053,10 +1292,13 @@ class ETAContentScript {
     if (this.rescanTimeout) {
       clearTimeout(this.rescanTimeout);
     }
+    if (this.cachedNetworkData) {
+      this.cachedNetworkData.clear();
+    }
   }
 }
 
-// Initialize content script
+// Initialize optimized content script
 const etaContentScript = new ETAContentScript();
 
 // Listen for messages from popup
@@ -1065,7 +1307,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   
   switch (request.action) {
     case 'ping':
-      sendResponse({ success: true, message: 'Content script is ready' });
+      sendResponse({ success: true, message: 'Optimized content script is ready' });
       break;
       
     case 'getInvoiceData':
@@ -1126,4 +1368,4 @@ window.addEventListener('beforeunload', () => {
   etaContentScript.cleanup();
 });
 
-console.log('ETA Exporter: Content script loaded successfully');
+console.log('ETA Exporter: Optimized content script loaded successfully');

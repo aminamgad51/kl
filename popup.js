@@ -340,6 +340,7 @@ class ETAInvoiceExporter {
   }
   
   async exportCurrentPage(format, options) {
+    this.startTime = Date.now();
     this.showStatus('جاري تصدير الصفحة الحالية...', 'loading');
     
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -352,10 +353,15 @@ class ETAInvoiceExporter {
     }
     
     await this.generateFile(dataToExport, format, options);
-    this.showStatus(`تم تصدير ${dataToExport.length} فاتورة بنجاح!`, 'success');
+    
+    const totalTime = Math.round((Date.now() - this.startTime) / 1000);
+    const timeText = totalTime > 60 ? `${Math.floor(totalTime/60)}د ${totalTime%60}ث` : `${totalTime}ث`;
+    
+    this.showStatus(`تم تصدير ${dataToExport.length} فاتورة بنجاح في ${timeText}!`, 'success');
   }
   
   async exportAllPages(format, options) {
+    this.startTime = Date.now(); // Track start time for progress estimation
     this.showProgress();
     this.showStatus('جاري تحميل جميع الصفحات...', 'loading');
     
@@ -389,7 +395,12 @@ class ETAInvoiceExporter {
     });
     
     await this.generateFile(dataToExport, format, options);
-    this.showStatus(`تم تصدير ${dataToExport.length} فاتورة من جميع الصفحات بنجاح!`, 'success');
+    
+    // Calculate total time taken
+    const totalTime = Math.round((Date.now() - this.startTime) / 1000);
+    const timeText = totalTime > 60 ? `${Math.floor(totalTime/60)}د ${totalTime%60}ث` : `${totalTime}ث`;
+    
+    this.showStatus(`تم تصدير ${dataToExport.length} فاتورة من جميع الصفحات بنجاح في ${timeText}!`, 'success');
   }
   
   showProgress() {
@@ -414,19 +425,54 @@ class ETAInvoiceExporter {
     }
     
     if (this.elements.progressText) {
-      this.elements.progressText.textContent = progress.message || `الصفحة ${progress.currentPage} من ${progress.totalPages} (${Math.round(percentage)}%)`;
+      // Add estimated time remaining
+      const timeEstimate = this.calculateTimeEstimate(progress);
+      const baseMessage = progress.message || `الصفحة ${progress.currentPage} من ${progress.totalPages} (${Math.round(percentage)}%)`;
+      this.elements.progressText.textContent = timeEstimate ? `${baseMessage} - ${timeEstimate}` : baseMessage;
     }
+  }
+  
+  calculateTimeEstimate(progress) {
+    if (!this.startTime) {
+      this.startTime = Date.now();
+      return null;
+    }
+    
+    const elapsed = Date.now() - this.startTime;
+    const percentage = progress.percentage || (progress.totalPages > 0 ? (progress.currentPage / progress.totalPages) * 100 : 0);
+    
+    if (percentage > 5) { // Only show estimate after 5% completion
+      const estimatedTotal = (elapsed / percentage) * 100;
+      const remaining = estimatedTotal - elapsed;
+      
+      if (remaining > 0) {
+        const minutes = Math.floor(remaining / 60000);
+        const seconds = Math.floor((remaining % 60000) / 1000);
+        
+        if (minutes > 0) {
+          return `متبقي: ${minutes}د ${seconds}ث`;
+        } else {
+          return `متبقي: ${seconds}ث`;
+        }
+      }
+    }
+    
+    return null;
   }
   
   async loadInvoiceDetails(invoices, tabId) {
     const detailedInvoices = [];
-    const batchSize = 2;
+    const batchSize = 5; // Increased batch size for parallel processing
     
-    for (let i = 0; i < invoices.length; i += batchSize) {
-      const batch = invoices.slice(i, i + batchSize);
+    // Process invoices in parallel batches for much faster loading
+    const processBatch = async (batch, startIndex) => {
       const batchPromises = batch.map(async (invoice, batchIndex) => {
-        const globalIndex = i + batchIndex;
-        this.showStatus(`جاري تحميل تفاصيل الفاتورة ${globalIndex + 1} من ${invoices.length}...`, 'loading');
+        const globalIndex = startIndex + batchIndex;
+        
+        // Update progress less frequently to avoid UI blocking
+        if (globalIndex % 10 === 0) {
+          this.showStatus(`جاري تحميل تفاصيل الفاتورة ${globalIndex + 1} من ${invoices.length}...`, 'loading');
+        }
         
         try {
           const detailResponse = await this.sendMessageWithRetry(tabId, {
@@ -448,11 +494,36 @@ class ETAInvoiceExporter {
         }
       });
       
-      const batchResults = await Promise.all(batchPromises);
-      detailedInvoices.push(...batchResults);
+      return Promise.all(batchPromises);
+    };
+    
+    // Process all batches with controlled concurrency
+    const maxConcurrentBatches = 3; // Process up to 3 batches simultaneously
+    const allBatches = [];
+    
+    for (let i = 0; i < invoices.length; i += batchSize) {
+      const batch = invoices.slice(i, i + batchSize);
+      allBatches.push({ batch, startIndex: i });
+    }
+    
+    // Process batches with limited concurrency
+    for (let i = 0; i < allBatches.length; i += maxConcurrentBatches) {
+      const concurrentBatches = allBatches.slice(i, i + maxConcurrentBatches);
       
-      if (i + batchSize < invoices.length) {
-        await new Promise(resolve => setTimeout(resolve, 200));
+      const batchPromises = concurrentBatches.map(({ batch, startIndex }) => 
+        processBatch(batch, startIndex)
+      );
+      
+      const batchResults = await Promise.all(batchPromises);
+      
+      // Flatten results and add to detailed invoices
+      batchResults.forEach(result => {
+        detailedInvoices.push(...result);
+      });
+      
+      // Minimal delay between batch groups to prevent overwhelming the server
+      if (i + maxConcurrentBatches < allBatches.length) {
+        await new Promise(resolve => setTimeout(resolve, 100)); // Reduced from 200ms
       }
     }
     

@@ -1,329 +1,295 @@
--close {
-      background: #f44336;
-      color: white;
-    }
-    
-    .btn-close:hover {
-      background: #d32f2f;
-    }
-    
-    .btn-json {
-      background: #ff9800;
-      color: white;
-    }
-    
-    .btn-json:hover {
-      background: #f57c00;
-    }
-    
-    .btn-excel {
-      background: #4caf50;
-      color: white;
-    }
-    
-    .btn-excel:hover {
-      background: #388e3c;
-    }
-    
-    .btn-pdf {
-      background: #2196f3;
-      color: white;
-    }
-    
-    .btn-pdf:hover {
-      background: #1976d2;
-    }
-    
-    .btn:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-    
-    .status {
-      margin-top: 15px;
-      padding: 10px;
-      border-radius: 4px;
-      text-align: center;
-      font-size: 12px;
-      min-height: 20px;
-    }
-    
-    .status.success {
-      background: #e8f5e8;
-      color: #2e7d32;
-      border: 1px solid #4caf50;
-    }
-    
-    .status.error {
-      background: #ffebee;
-      color: #c62828;
-      border: 1px solid #f44336;
-    }
-    
-    .status.loading {
-      background: #e3f2fd;
-      color: #1565c0;
-      border: 1px solid #2196f3;
-    }
-    
-    .performance-info {
-      background: #e8f5e8;
-      border: 1px solid #4caf50;
-      border-radius: 4px;
-      padding: 8px;
-      margin-bottom: 10px;
-      font-size: 11px;
-      text-align: center;
-      color: #2e7d32;
-    }
-    
-    .performance-info .highlight {
-      font-weight: bold;
-      color: #1b5e20;
-    }
-    
-    .loading-spinner {
-      display: inline-block;
-      width: 12px;
-      height: 12px;
-      border: 2px solid #f3f3f3;
-      border-top: 2px solid #1565c0;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-      margin-left: 8px;
-    }
-    
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-    
-    .count-info {
-      background: #f0f0f0;
-      padding: 8px;
-      border-radius: 4px;
-      font-size: 12px;
-      text-align: center;
-      margin-bottom: 10px;
-    }
-    
-    .disclaimer {
-      font-size: 10px;
-      color: #666;
-      text-align: center;
-      margin-top: 10px;
-      padding: 8px;
-      background: #f9f9f9;
-      border-radius: 4px;
-    }
-
-    .select-all-container {
-      grid-column: 1 / -1;
-      margin-bottom: 10px;
-      padding-top: 10px;
-      border-top: 1px solid #e0e0e0;
-    }
-
-    .select-all-container .checkbox-item {
-      background: #f8f9fa;
-      border: 1px solid #dee2e6;
-      border-radius: 4px;
-      padding: 8px;
-    }
-
-    .select-all-container label {
-      font-weight: bold;
-      color: #495057;
-    }
-  </style>
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>مُصدِّر الفواتير المجاني</title>
+  <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <div class="header">
-    <h1>مصدر فواتير الضرائب المصرية</h1>
-    <p>تصدير بيانات الفواتير إلى Excel - جميع الأعمدة</p>
-  </div>
-  
-  <div class="content">
-    <div class="count-info" id="countInfo">
-      جاري فحص البيانات...
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div class="logo">
+        <span class="logo-icon">📊</span>
+        <h1>مُصدِّر الفواتير المجاني</h1>
+      </div>
+      <div class="status-indicator">
+        <div class="status-dot"></div>
+        <span>جاهز</span>
+      </div>
     </div>
-    
-    <div class="performance-info">
-      <span class="highlight">🚀 فائق السرعة:</span> استخراج أسرع بـ 5-10 مرات مع تحسينات الشبكة المتقدمة وإصلاح مشاكل التنقل
-    </div>
-    
+
+    <!-- Main Content -->
     <div class="section">
-      <div class="section-title">الحقول المطلوب تصديرها (حسب ترتيب الجدول):</div>
-      <div class="checkbox-group">
-        <!-- Row 1 -->
-        <div class="checkbox-item">
-          <input type="checkbox" id="option-serial-number" checked>
-          <label for="option-serial-number">مسلسل</label>
-        </div>
-        <div class="checkbox-item">
-          <input type="checkbox" id="option-details-button">
-          <label for="option-details-button">تفاصيل (زر عرض)</label>
-        </div>
+      <div class="welcome-container">
+        <h2>مرحباً بك في مُصدِّر الفواتير المجاني</h2>
+        <p class="welcome-text">
+          استخرج وصدّر بيانات الفواتير من بوابة الفاتورة الإلكترونية المصرية بسهولة وسرعة فائقة
+        </p>
         
-        <!-- Row 2 -->
-        <div class="checkbox-item">
-          <input type="checkbox" id="option-document-type" checked>
-          <label for="option-document-type">نوع المستند</label>
-        </div>
-        <div class="checkbox-item">
-          <input type="checkbox" id="option-document-version">
-          <label for="option-document-version">نسخة المستند</label>
-        </div>
-        
-        <!-- Row 3 -->
-        <div class="checkbox-item">
-          <input type="checkbox" id="option-status" checked>
-          <label for="option-status">الحالة</label>
-        </div>
-        <div class="checkbox-item">
-          <input type="checkbox" id="option-issue-date" checked>
-          <label for="option-issue-date">تاريخ الإصدار</label>
-        </div>
-        
-        <!-- Row 4 -->
-        <div class="checkbox-item">
-          <input type="checkbox" id="option-submission-date">
-          <label for="option-submission-date">تاريخ التقديم</label>
-        </div>
-        <div class="checkbox-item">
-          <input type="checkbox" id="option-invoice-currency">
-          <label for="option-invoice-currency">عملة الفاتورة</label>
-        </div>
-        
-        <!-- Row 5 -->
-        <div class="checkbox-item">
-          <input type="checkbox" id="option-invoice-value" checked>
-          <label for="option-invoice-value">قيمة الفاتورة</label>
-        </div>
-        <div class="checkbox-item">
-          <input type="checkbox" id="option-vat-amount">
-          <label for="option-vat-amount">ضريبة القيمة المضافة</label>
-        </div>
-        
-        <!-- Row 6 -->
-        <div class="checkbox-item">
-          <input type="checkbox" id="option-tax-discount">
-          <label for="option-tax-discount">الخصم تحت حساب الضريبة</label>
-        </div>
-        <div class="checkbox-item">
-          <input type="checkbox" id="option-total-invoice" checked>
-          <label for="option-total-invoice">إجمالي الفاتورة</label>
-        </div>
-        
-        <!-- Row 7 -->
-        <div class="checkbox-item">
-          <input type="checkbox" id="option-internal-number" checked>
-          <label for="option-internal-number">الرقم الداخلي</label>
-        </div>
-        <div class="checkbox-item">
-          <input type="checkbox" id="option-electronic-number" checked>
-          <label for="option-electronic-number">الرقم الإلكتروني</label>
-        </div>
-        
-        <!-- Row 8 -->
-        <div class="checkbox-item">
-          <input type="checkbox" id="option-seller-tax-number">
-          <label for="option-seller-tax-number">الرقم الضريبي للبائع</label>
-        </div>
-        <div class="checkbox-item">
-          <input type="checkbox" id="option-seller-name">
-          <label for="option-seller-name">اسم البائع</label>
-        </div>
-        
-        <!-- Row 9 -->
-        <div class="checkbox-item">
-          <input type="checkbox" id="option-seller-address">
-          <label for="option-seller-address">عنوان البائع</label>
-        </div>
-        <div class="checkbox-item">
-          <input type="checkbox" id="option-buyer-tax-number">
-          <label for="option-buyer-tax-number">الرقم الضريبي للمشتري</label>
-        </div>
-        
-        <!-- Row 10 -->
-        <div class="checkbox-item">
-          <input type="checkbox" id="option-buyer-name">
-          <label for="option-buyer-name">اسم المشتري</label>
-        </div>
-        <div class="checkbox-item">
-          <input type="checkbox" id="option-buyer-address">
-          <label for="option-buyer-address">عنوان المشتري</label>
-        </div>
-        
-        <!-- Row 11 -->
-        <div class="checkbox-item">
-          <input type="checkbox" id="option-purchase-order-ref">
-          <label for="option-purchase-order-ref">مرجع طلب الشراء</label>
-        </div>
-        <div class="checkbox-item">
-          <input type="checkbox" id="option-purchase-order-desc">
-          <label for="option-purchase-order-desc">وصف طلب الشراء</label>
-        </div>
-        
-        <!-- Row 12 -->
-        <div class="checkbox-item">
-          <input type="checkbox" id="option-sales-order-ref">
-          <label for="option-sales-order-ref">مرجع طلب المبيعات</label>
-        </div>
-        <div class="checkbox-item">
-          <input type="checkbox" id="option-electronic-signature">
-          <label for="option-electronic-signature">التوقيع الإلكتروني</label>
-        </div>
-        
-        <!-- Row 13 -->
-        <div class="checkbox-item">
-          <input type="checkbox" id="option-food-drug-guide">
-          <label for="option-food-drug-guide">دليل الغذاء والدواء</label>
-        </div>
-        <div class="checkbox-item">
-          <input type="checkbox" id="option-external-link">
-          <label for="option-external-link">الرابط الخارجي</label>
+        <div class="performance-info">
+          <span class="highlight">⚡ فائق السرعة:</span> 
+          محسّن للسرعة القصوى مع كشف ذكي للصفحات وتوقف تلقائي
         </div>
 
-        <!-- Select All Option -->
-        <div class="select-all-container">
-          <div class="checkbox-item">
-            <input type="checkbox" id="option-select-all">
-            <label for="option-select-all">تحديد جميع الحقول</label>
+        <div class="count-info" id="countInfo">
+          جاري فحص البيانات...
+        </div>
+
+        <div class="features-list">
+          <div class="feature-item">
+            <span class="feature-icon">✓</span>
+            <span>استخراج سريع ومحسّن للبيانات</span>
+          </div>
+          <div class="feature-item">
+            <span class="feature-icon">✓</span>
+            <span>تصدير إلى Excel مع تنسيق احترافي</span>
+          </div>
+          <div class="feature-item">
+            <span class="feature-icon">✓</span>
+            <span>دعم جميع الصفحات مع كشف ذكي للنهاية</span>
+          </div>
+          <div class="feature-item">
+            <span class="feature-icon">✓</span>
+            <span>شريط تقدم مع تقدير الوقت المتبقي</span>
           </div>
         </div>
       </div>
     </div>
-    
+
+    <!-- Data Selection -->
     <div class="section">
-      <div class="section-title">خيارات التصدير:</div>
-      <div class="checkbox-group">
-        <div class="checkbox-item special-option">
-          <input type="checkbox" id="option-download-details">
-          <label for="option-download-details">تحميل بيانات تفاصيل الفاتورة (أصناف) - وقت تحميل أطول</label>
+      <div class="data-selection">
+        <h3>اختيار البيانات المطلوب تصديرها</h3>
+        <div class="columns-grid">
+          <label class="checkbox-container">
+            <input type="checkbox" id="option-serial-number" checked>
+            <span class="checkmark"></span>
+            تسلسل
+          </label>
+          
+          <label class="checkbox-container">
+            <input type="checkbox" id="option-details-button">
+            <span class="checkmark"></span>
+            عرض
+          </label>
+          
+          <label class="checkbox-container">
+            <input type="checkbox" id="option-document-type" checked>
+            <span class="checkmark"></span>
+            نوع المستند
+          </label>
+          
+          <label class="checkbox-container">
+            <input type="checkbox" id="option-document-version">
+            <span class="checkmark"></span>
+            نسخة المستند
+          </label>
+          
+          <label class="checkbox-container">
+            <input type="checkbox" id="option-status" checked>
+            <span class="checkmark"></span>
+            الحالة
+          </label>
+          
+          <label class="checkbox-container">
+            <input type="checkbox" id="option-issue-date" checked>
+            <span class="checkmark"></span>
+            تاريخ الإصدار
+          </label>
+          
+          <label class="checkbox-container">
+            <input type="checkbox" id="option-submission-date">
+            <span class="checkmark"></span>
+            تاريخ التقديم
+          </label>
+          
+          <label class="checkbox-container">
+            <input type="checkbox" id="option-invoice-currency">
+            <span class="checkmark"></span>
+            عملة الفاتورة
+          </label>
+          
+          <label class="checkbox-container">
+            <input type="checkbox" id="option-invoice-value" checked>
+            <span class="checkmark"></span>
+            قيمة الفاتورة
+          </label>
+          
+          <label class="checkbox-container">
+            <input type="checkbox" id="option-vat-amount">
+            <span class="checkmark"></span>
+            ضريبة القيمة المضافة
+          </label>
+          
+          <label class="checkbox-container">
+            <input type="checkbox" id="option-tax-discount">
+            <span class="checkmark"></span>
+            الخصم تحت حساب الضريبة
+          </label>
+          
+          <label class="checkbox-container">
+            <input type="checkbox" id="option-total-invoice" checked>
+            <span class="checkmark"></span>
+            إجمالي الفاتورة
+          </label>
+          
+          <label class="checkbox-container">
+            <input type="checkbox" id="option-internal-number" checked>
+            <span class="checkmark"></span>
+            الرقم الداخلي
+          </label>
+          
+          <label class="checkbox-container">
+            <input type="checkbox" id="option-electronic-number" checked>
+            <span class="checkmark"></span>
+            الرقم الإلكتروني
+          </label>
+          
+          <label class="checkbox-container">
+            <input type="checkbox" id="option-seller-tax-number">
+            <span class="checkmark"></span>
+            الرقم الضريبي للبائع
+          </label>
+          
+          <label class="checkbox-container">
+            <input type="checkbox" id="option-seller-name">
+            <span class="checkmark"></span>
+            اسم البائع
+          </label>
+          
+          <label class="checkbox-container">
+            <input type="checkbox" id="option-seller-address">
+            <span class="checkmark"></span>
+            عنوان البائع
+          </label>
+          
+          <label class="checkbox-container">
+            <input type="checkbox" id="option-buyer-tax-number">
+            <span class="checkmark"></span>
+            الرقم الضريبي للمشتري
+          </label>
+          
+          <label class="checkbox-container">
+            <input type="checkbox" id="option-buyer-name">
+            <span class="checkmark"></span>
+            اسم المشتري
+          </label>
+          
+          <label class="checkbox-container">
+            <input type="checkbox" id="option-buyer-address">
+            <span class="checkmark"></span>
+            عنوان المشتري
+          </label>
+          
+          <label class="checkbox-container">
+            <input type="checkbox" id="option-purchase-order-ref">
+            <span class="checkmark"></span>
+            مرجع طلب الشراء
+          </label>
+          
+          <label class="checkbox-container">
+            <input type="checkbox" id="option-purchase-order-desc">
+            <span class="checkmark"></span>
+            وصف طلب الشراء
+          </label>
+          
+          <label class="checkbox-container">
+            <input type="checkbox" id="option-sales-order-ref">
+            <span class="checkmark"></span>
+            مرجع طلب المبيعات
+          </label>
+          
+          <label class="checkbox-container">
+            <input type="checkbox" id="option-electronic-signature">
+            <span class="checkmark"></span>
+            التوقيع الإلكتروني
+          </label>
+          
+          <label class="checkbox-container">
+            <input type="checkbox" id="option-food-drug-guide">
+            <span class="checkmark"></span>
+            دليل الغذاء والدواء
+          </label>
+          
+          <label class="checkbox-container">
+            <input type="checkbox" id="option-external-link">
+            <span class="checkmark"></span>
+            الرابط الخارجي
+          </label>
         </div>
-        <div class="checkbox-item">
-          <input type="checkbox" id="option-combine-all">
-          <label for="option-combine-all">Excel - تجميع الأصناف في صفحة واحدة</label>
-        </div>
-        <div class="checkbox-item download-all-option">
-          <input type="checkbox" id="option-download-all">
-          <label for="option-download-all">تحميل جميع الصفحات - <span id="totalCountText">299</span> فاتورة (قد يستغرق وقتاً أطول)</label>
+        
+        <div class="select-all-container">
+          <label class="checkbox-container">
+            <input type="checkbox" id="option-select-all">
+            <span class="checkmark"></span>
+            تحديد جميع الحقول
+          </label>
         </div>
       </div>
     </div>
-    
-    <div class="buttons">
-      <button class="btn btn-close" id="closeBtn">إغلاق</button>
-      <button class="btn btn-json" id="jsonBtn">JSON/XML</button>
-      <button class="btn btn-excel" id="excelBtn">Excel</button>
-      <button class="btn btn-pdf" id="pdfBtn">PDF</button>
+
+    <!-- Export Options -->
+    <div class="section">
+      <div class="export-options">
+        <h3>خيارات التصدير</h3>
+        <div class="options-grid">
+          <label class="checkbox-container">
+            <input type="checkbox" id="option-download-details">
+            <span class="checkmark"></span>
+            تحميل تفاصيل الفواتير (أصناف) - وقت أطول
+          </label>
+          
+          <label class="checkbox-container">
+            <input type="checkbox" id="option-combine-all">
+            <span class="checkmark"></span>
+            دمج الأصناف في صفحة واحدة
+          </label>
+          
+          <label class="checkbox-container">
+            <input type="checkbox" id="option-download-all">
+            <span class="checkmark"></span>
+            تحميل جميع الصفحات - <span id="totalCountText">0</span> فاتورة
+          </label>
+        </div>
+      </div>
     </div>
-    
-    <div class="status" id="status"></div>
-    
-    <!-- Progress container will be inserted here dynamically -->
-    
+
+    <!-- Export Buttons -->
+    <div class="section">
+      <div class="export-buttons">
+        <button class="btn btn-secondary" id="jsonBtn">
+          <span class="btn-icon">📄</span>
+          JSON/XML
+        </button>
+        <button class="btn btn-primary" id="excelBtn">
+          <span class="btn-icon">📊</span>
+          Excel
+        </button>
+      </div>
+      
+      <button class="btn btn-secondary" id="pdfBtn" style="margin-top: 8px; width: 100%;">
+        <span class="btn-icon">📋</span>
+        PDF (قريباً)
+      </button>
+    </div>
+
+    <!-- Status -->
+    <div class="section">
+      <div id="status" class="status"></div>
+    </div>
+
+    <!-- Back Button -->
+    <div class="back-container">
+      <button class="btn btn-link" id="closeBtn">إغلاق</button>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <span class="version">الإصدار 1.0.0</span>
+    <span class="support">مجاني تماماً</span>
   </div>
 
   <script src="libs/xlsx.full.min.js"></script>

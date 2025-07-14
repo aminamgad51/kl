@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "ETA Invoice Exporter",
+  "name": "مُصدِّر الفواتير المجاني - ETA Invoice Exporter",
   "version": "1.0.0",
-  "description": "Export invoice data from Egyptian eInvoicing portal to Excel",
+  "description": "استخراج وتصدير بيانات الفواتير من بوابة الفاتورة الإلكترونية المصرية - مجاني وسريع",
   "permissions": [
     "activeTab",
     "scripting",
@@ -13,7 +13,7 @@
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "ETA Invoice Exporter"
+    "default_title": "مُصدِّر الفواتير المجاني"
   },
   "content_scripts": [
     {

@@ -441,7 +441,7 @@ class ETAInvoiceExporter {
     const elapsed = Date.now() - this.startTime;
     const percentage = progress.percentage || (progress.totalPages > 0 ? (progress.currentPage / progress.totalPages) * 100 : 0);
     
-    if (percentage > 5) { // Only show estimate after 5% completion
+    if (percentage > 2) { // Show estimate after just 2% completion for faster feedback
       const estimatedTotal = (elapsed / percentage) * 100;
       const remaining = estimatedTotal - elapsed;
       
@@ -462,7 +462,7 @@ class ETAInvoiceExporter {
   
   async loadInvoiceDetails(invoices, tabId) {
     const detailedInvoices = [];
-    const batchSize = 5; // Increased batch size for parallel processing
+    const batchSize = 10; // Further increased batch size for maximum speed
     
     // Process invoices in parallel batches for much faster loading
     const processBatch = async (batch, startIndex) => {
@@ -498,7 +498,7 @@ class ETAInvoiceExporter {
     };
     
     // Process all batches with controlled concurrency
-    const maxConcurrentBatches = 3; // Process up to 3 batches simultaneously
+    const maxConcurrentBatches = 5; // Increased to 5 batches simultaneously for maximum speed
     const allBatches = [];
     
     for (let i = 0; i < invoices.length; i += batchSize) {
@@ -523,7 +523,7 @@ class ETAInvoiceExporter {
       
       // Minimal delay between batch groups to prevent overwhelming the server
       if (i + maxConcurrentBatches < allBatches.length) {
-        await new Promise(resolve => setTimeout(resolve, 100)); // Reduced from 200ms
+        await new Promise(resolve => setTimeout(resolve, 50)); // Further reduced to 50ms
       }
     }
     
